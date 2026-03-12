@@ -8,7 +8,7 @@ A locked module gated by a mathematical operation on three convolutional kernels
 
 ## Recon
 
-The provided script used least-squares regression to recover the 3×3 convolution kernel applied to each RGB channel. Running it against the two images produced:
+The provided script used least-squares regression to recover the 3×3 convolution kernel applied to each RGB channel. Running it against the two images produced gives us the following kernel values:
 
 ```
 Red:   [[ 1 -1  0], [-1  5 -1], [ 2 -1  0]]

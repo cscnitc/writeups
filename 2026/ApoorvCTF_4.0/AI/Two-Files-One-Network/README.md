@@ -59,3 +59,4 @@ The flag -
 ```
 apoorvctf{l0r4_m3rg3}
 ```
+code [here](./solve.py)

@@ -44,3 +44,5 @@ The flag -
 ```
 apoorvctf{7d88323_0.0245}
 ```
+
+code [here](./solve.py)

@@ -65,3 +65,5 @@ The flag -
 ```
 apoorvctf{3v3ry_5y573m_h45_4_w34kn355}
 ```
+
+code [here](./solve.py)
