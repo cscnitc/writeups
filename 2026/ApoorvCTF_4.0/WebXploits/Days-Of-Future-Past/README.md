@@ -1,64 +1,26 @@
 ---
-title: "ApoorvCTF 4.0 - Days Of Future Past"
-pubDatetime: 2026-03-12T12:00:00+00:00
+title: "ApoorvCTF 4.0 - Days of Future Past"
+pubDatetime: 2026-03-09T12:00:00+00:00
 author: "JayJayTee"
 ---
 
-A web application called CryptoVault stored encrypted messages using a XOR stream cipher. The attack chain combined JWT forgery for admin access followed by a many-time pad attack to recover the flag. Category was Cryptography / Web Exploitation.
+Web app storing encrypted messages with a XOR stream cipher. You need to forge admin access and then break the encryption to get the flag.
 
-## Step 1: Reconnaissance
+Checking the HTML source gives you a few hints in comments - a `/backup/` path and `/static/js/app.js`. The JS has a hardcoded backup config path `/backup/config.json.bak` and a commented reference to an `X-API-Key` header. Fetching the bak file gives you the API key.
 
-The HTML source leaked useful hints in comments:
-
-```
-/api/v1/health        → debug/health endpoint
-/backup/              → backup directory hint
-/static/js/app.js     → frontend JS with full API map
-```
-
-The JS file contained a hardcoded backup config path and a commented-out hint about an `X-API-Key` header:
-
-```js
-// backupConfig: '/backup/config.json.bak'
-```
-
-## Step 2: JWT Secret Recovery & Forgery
-
-Fetching `/backup/config.json.bak` revealed the API key. The `/api/v1/debug` endpoint (authenticated with the key) returned:
-
-```json
-"secret_derivation_hint": "Company name (lowercase) concatenated with founding year"
-```
-
-Company **CryptoVault**, founded **2026** → secret: `cryptovault2026`. Verified by the SHA-256 hash returned by the debug endpoint.
-
-Forged admin JWT:
+With that key you can hit `/api/v1/debug` which hands over a JWT secret derivation hint: "Company name (lowercase) concatenated with founding year". Company is CryptoVault, founded 2026, so the secret is `cryptovault2026`. You can verify this against the SHA-256 hash the endpoint also returns. Then forge an admin token:
 
 ```python
-jwt.encode(
-    {"sub": "rad", "role": "admin", "exp": 9999999999},
-    "cryptovault2026",
-    algorithm="HS256"
-)
+jwt.encode({"sub": "rad", "role": "admin", "exp": 9999999999}, "cryptovault2026", algorithm="HS256")
 ```
 
-## Step 3: Vault Access
+That gets you into `/api/v1/vault/messages` which returns 15 XOR-encrypted messages in hex. The debug endpoint also tells you they all use the same key stored in an HSM that can't be exported. That's the vulnerability — reusing the same XOR key across all 15 messages is the classic many-time pad mistake.
 
-The forged token unlocked `/api/v1/vault/messages`, returning 15 XOR-encrypted messages in hex. The debug endpoint confirmed a XOR stream cipher with a key in an HSM — meaning the key cannot be exported directly.
+When you XOR two ciphertexts encrypted with the same key, the key drops out completely: `C1 XOR C2 = M1 XOR M2`. You're left with two plaintexts XORed together. With 15 messages that's over 100 pairs to work with.
 
-## Step 4: Many-Time Pad Attack
+The space trick makes this tractable - XORing a space (0x20) with any lowercase letter gives the uppercase version and vice versa. So if you XOR two ciphertexts and see a readable letter at some position, there's a good chance one message has a space there. That gives you a bunch of probable key bytes.
 
-All 15 messages were encrypted with the **same key**. This is the classic many-time pad weakness:
-
-```
-C1 XOR C2 = (M1 XOR K) XOR (M2 XOR K) = M1 XOR M2
-```
-
-The key cancels entirely, leaving two plaintexts XORed together.
-
-**The Space Trick** — XORing a space (0x20) with any lowercase letter produces the corresponding uppercase letter, and vice versa. With 15 messages and 105+ pairwise combinations, likely space positions fall out quickly.
-
-**Crib Dragging** — sliding a known plaintext fragment (e.g. `apoorvctf{`) across ciphertext XOR pairs. All 15 messages shared the same flag-format prefix, giving 10 key bytes immediately. Each confirmed byte decrypts that position across every message, creating a snowball: more plaintext → more cribs → more key bytes.
+From there crib dragging does the rest. All 15 messages start with `apoorvctf{` which gives you 10 key bytes immediately. Each confirmed byte decrypts that position across all 15 messages, which reveals more plaintext, more cribs, more key bytes. Snowball from there.
 
 The flag -
 
